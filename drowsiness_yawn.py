@@ -62,8 +62,22 @@ def lip_distance(shape):
 st.title("Driver Drowsiness Detection System")
 st.markdown("Click the button below to start detecting drowsiness.")
 
-# Start button for detection
-if st.button("Start Detection"):
+# Initialize session state variables
+if "detection_running" not in st.session_state:
+    st.session_state.detection_running = False
+
+# Start Detection button
+if not st.session_state.detection_running:
+    if st.button("Start Detection", key="start_detection"):
+        st.session_state.detection_running = True
+
+# Stop Detection button
+if st.session_state.detection_running:
+    if st.button("Stop Detection", key="stop_detection"):
+        st.session_state.detection_running = False
+
+# Start detection logic if running
+if st.session_state.detection_running:
     st.text("Loading the predictor and detector...")
 
     # Initialize Haar Cascade and dlib predictor
@@ -76,11 +90,11 @@ if st.button("Start Detection"):
 
     # Create a placeholder for the video frame
     frame_placeholder = st.empty()
-    stop_button = False
-    
+    alarm_status = False
+    alarm_status2 = False
 
     # Process video frames
-    while True:
+    while st.session_state.detection_running:
         frame = vs.read()[1]
         if frame is None:
             st.error("Failed to grab frame from the video stream.")
@@ -126,14 +140,11 @@ if st.button("Start Detection"):
             else:
                 alarm_status2 = False
 
-        # Display only the live video feed, no text alerts
+        # Display only the live video feed
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_placeholder.image(frame_rgb, channels="RGB", use_column_width=True)
 
-        # Stop if user interrupts the loop
-        if st.button("Stop Detection"):
-            break
-
-    vs.stop()
+    vs.release()
     cv2.destroyAllWindows()
     st.text("Detection stopped.")
+
