@@ -1,6 +1,3 @@
-
-
-
 import streamlit as st
 import imutils
 import cv2
@@ -106,7 +103,6 @@ if st.button("Start Detection"):
             cv2.drawContours(frame, [lip], -1, (0, 255, 0), 1)
 
             # EAR threshold logic
-            #global COUNTER  # Declare COUNTER as global here
             if ear < EYE_AR_THRESH:
                 COUNTER += 1
                 if COUNTER >= EYE_AR_CONSEC_FRAMES:
@@ -129,8 +125,8 @@ if st.button("Start Detection"):
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_placeholder.image(frame_rgb, channels="RGB", use_column_width=True)
 
-        # Exit on 'q' key press
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        # Stop if user interrupts the loop
+        if st.button("Stop Detection"):
             break
 
     vs.stop()
