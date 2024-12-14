@@ -76,8 +76,8 @@ if st.button("Start Detection"):
 
     # Create a placeholder for the video frame
     frame_placeholder = st.empty()
-    alarm_status = False
-    alarm_status2 = False
+    stop_button = False
+    
 
     # Process video frames
     while True:
