@@ -1,44 +1,34 @@
 import streamlit as st
-import imutils
 import cv2
 import dlib
+import imutils
 import numpy as np
-from imutils.video import VideoStream
 from imutils import face_utils
-from threading import Thread
-import playsound
-import time
 from scipy.spatial import distance as dist
+import time
 
-
-# Initialize variables
+# Constants
 EYE_AR_THRESH = 0.3
 EYE_AR_CONSEC_FRAMES = 30
 YAWN_THRESH = 20
-alarm_status = False
-alarm_status2 = False
-saying = False
-COUNTER = 0  # Declare COUNTER here
 
+# Initialize session state variables
+if "counter" not in st.session_state:
+    st.session_state.counter = 0
+if "alarm_status" not in st.session_state:
+    st.session_state.alarm_status = False
+if "alarm_status2" not in st.session_state:
+    st.session_state.alarm_status2 = False
+if "detection_running" not in st.session_state:
+    st.session_state.detection_running = False
 
-# Alarm function
-def sound_alarm(path):
-    global alarm_status, alarm_status2, saying
-    while alarm_status:
-        playsound.playsound(path)
-    if alarm_status2:
-        saying = True
-        playsound.playsound(path)
-        saying = False
-
-# Eye aspect ratio function
+# Helper functions
 def eye_aspect_ratio(eye):
     A = dist.euclidean(eye[1], eye[5])
     B = dist.euclidean(eye[2], eye[4])
     C = dist.euclidean(eye[0], eye[3])
     return (A + B) / (2.0 * C)
 
-# Final EAR function
 def final_ear(shape):
     (lStart, lEnd) = face_utils.FACIAL_LANDMARKS_IDXS["left_eye"]
     (rStart, rEnd) = face_utils.FACIAL_LANDMARKS_IDXS["right_eye"]
@@ -48,7 +38,6 @@ def final_ear(shape):
     rightEAR = eye_aspect_ratio(rightEye)
     return (leftEAR + rightEAR) / 2.0, leftEye, rightEye
 
-# Lip distance function
 def lip_distance(shape):
     top_lip = shape[50:53]
     top_lip = np.concatenate((top_lip, shape[61:64]))
@@ -60,57 +49,37 @@ def lip_distance(shape):
 
 # Streamlit UI
 st.title("Driver Drowsiness Detection System")
-st.markdown("Click the button below to start detecting drowsiness.")
+st.markdown("Upload a video file to start detecting drowsiness.")
 
-# Initialize session state variables
-if "detection_running" not in st.session_state:
-    st.session_state.detection_running = False
+uploaded_video = st.file_uploader("Choose a video file", type=["mp4", "avi", "mov"])
+if uploaded_video is not None:
+    st.session_state.detection_running = True
 
-# Start Detection button
-if not st.session_state.detection_running:
-    if st.button("Start Detection", key="start_detection"):
-        st.session_state.detection_running = True
-
-# Stop Detection button
-if st.session_state.detection_running:
-    if st.button("Stop Detection", key="stop_detection"):
-        st.session_state.detection_running = False
-
-# Start detection logic if running
-if st.session_state.detection_running:
-    st.text("Loading the predictor and detector...")
-
-    # Initialize Haar Cascade and dlib predictor
+if st.session_state.detection_running and uploaded_video is not None:
+    # Initialize dlib predictor and detector
     detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-    predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
-    vs = cv2.VideoCapture("video.mp4") 
-    if not vs.isOpened():
-        st.error("Error: Unable to open video file.")
-    time.sleep(1.0)
-
-    # Create a placeholder for the video frame
+    predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+    
+    # Read video frames
+    vs = cv2.VideoCapture(uploaded_video.name)
     frame_placeholder = st.empty()
-    alarm_status = False
-    alarm_status2 = False
 
-    # Process video frames
-    while st.session_state.detection_running:
-        frame = vs.read()[1]
-        if frame is None:
-            st.error("Failed to grab frame from the video stream.")
+    while vs.isOpened():
+        ret, frame = vs.read()
+        if not ret:
+            st.warning("End of video reached.")
             break
-        frame = imutils.resize(frame, width=450)  # Resize the frame
+
+        frame = imutils.resize(frame, width=450)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        rects = detector.detectMultiScale(gray, scaleFactor=1.1,
-                                          minNeighbors=5, minSize=(30, 30),
-                                          flags=cv2.CASCADE_SCALE_IMAGE)
+        rects = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE)
 
         for (x, y, w, h) in rects:
             rect = dlib.rectangle(int(x), int(y), int(x + w), int(y + h))
             shape = predictor(gray, rect)
             shape = face_utils.shape_to_np(shape)
 
-            # Eye and Lip detection
+            # EAR and Lip Distance calculations
             ear, leftEye, rightEye = final_ear(shape)
             distance = lip_distance(shape)
 
@@ -121,30 +90,29 @@ if st.session_state.detection_running:
             lip = shape[48:60]
             cv2.drawContours(frame, [lip], -1, (0, 255, 0), 1)
 
-            # EAR threshold logic
+            # EAR logic
             if ear < EYE_AR_THRESH:
-                COUNTER += 1
-                if COUNTER >= EYE_AR_CONSEC_FRAMES:
-                    if not alarm_status:
-                        alarm_status = True
-                        Thread(target=sound_alarm, args=("Alert.wav",)).start()
+                st.session_state.counter += 1
+                if st.session_state.counter >= EYE_AR_CONSEC_FRAMES:
+                    if not st.session_state.alarm_status:
+                        st.session_state.alarm_status = True
+                        st.warning("Drowsiness detected! Please take a break!")
             else:
-                COUNTER = 0
-                alarm_status = False
+                st.session_state.counter = 0
+                st.session_state.alarm_status = False
 
             # Yawn detection logic
             if distance > YAWN_THRESH:
-                if not alarm_status2:
-                    alarm_status2 = True
-                    Thread(target=sound_alarm, args=("music.wav",)).start()
+                if not st.session_state.alarm_status2:
+                    st.session_state.alarm_status2 = True
+                    st.warning("Yawning detected! Stay alert!")
             else:
-                alarm_status2 = False
+                st.session_state.alarm_status2 = False
 
-        # Display only the live video feed
+        # Display processed video frame
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_placeholder.image(frame_rgb, channels="RGB", use_column_width=True)
+        frame_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
 
     vs.release()
-    cv2.destroyAllWindows()
-    st.text("Detection stopped.")
-
+    st.session_state.detection_running = False
+    st.success("Video processing complete!")
