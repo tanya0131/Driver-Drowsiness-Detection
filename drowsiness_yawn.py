@@ -69,7 +69,9 @@ if st.button("Start Detection"):
     # Initialize Haar Cascade and dlib predictor
     detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
     predictor = dlib.shape_predictor('shape_predictor_68_face_landmarks.dat')
-    vs = VideoStream(src=0).start()
+    vs = cv2.VideoCapture("video.mp4") 
+    if not vs.isOpened():
+        st.error("Error: Unable to open video file.")
     time.sleep(1.0)
 
     # Create a placeholder for the video frame
@@ -79,7 +81,10 @@ if st.button("Start Detection"):
 
     # Process video frames
     while True:
-        frame = vs.read()
+        frame = vs.read()[1]
+        if frame is None:
+            st.error("Failed to grab frame from the video stream.")
+            break
         frame = imutils.resize(frame, width=450)  # Resize the frame
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         rects = detector.detectMultiScale(gray, scaleFactor=1.1,
